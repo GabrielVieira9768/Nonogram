@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Nonogram — Gerador e Jogo (5–25)</title>
+<title>Nonogram — (5–25)</title>
 <style>
   :root{
     --bg:#0b0f14; --panel:#121821; --muted:#1a2330; --text:#e7eefc;
@@ -136,7 +136,7 @@
 </head>
 <body>
   <header>
-    <h1>🧩 Nonogram — Gerador & Jogo</h1>
+    <h1>🧩 Nonogram</h1>
     <div class="controls">
       <div class="group">
         <label for="w">Largura:</label>
@@ -153,9 +153,9 @@
       <div class="group">
         <label for="dens">Densidade:</label>
         <select id="dens" aria-label="Densidade">
-          <option value="0.30">Leve</option>
-          <option value="0.45" selected>Média</option>
-          <option value="0.60">Alta</option>
+          <option value="0.40">Leve</option>
+          <option value="0.55" selected>Média</option>
+          <option value="0.70">Alta</option>
         </select>
       </div>
       <button id="gen" class="primary"></button>
@@ -247,7 +247,7 @@
   const winModal = $('#winModal');
   const winStats = $('#winStats');
 
-  let W = 10, H = 10, density = 0.45;
+  let W = 10, H = 10, density = 0.55;
   let solution = [];     // H x W booleans
   let player = [];       // H x W: 0 empty, 1 filled, 2 X
   let mouseDown = false, paintMode = 1; // 1=fill, 2=mark, 0=empty
