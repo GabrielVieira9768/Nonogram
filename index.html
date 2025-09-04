@@ -77,6 +77,10 @@
   }
   .cell:nth-child(even){background:var(--cell2)}
   .cell.filled{background:#e7eefc; color:#0b1220}
+  /* Hover highlight */
+  .cell.hovered { box-shadow:0 0 0 2px var(--accent), 0 0 12px rgba(107,194,255,.18); z-index:2; }
+  .cell.row-hovered { background:rgba(107,194,255,.08); }
+  .cell.col-hovered { background:rgba(107,194,255,.08); }
   .cell.mark::after{content:"×"; font-weight:700; opacity:.85}
   .cell.wrong{outline:2px solid var(--bad)}
   .cell.locked{opacity:1; box-shadow:inset 0 0 0 2px rgba(181, 49, 199, 0.219); cursor:default}
@@ -342,6 +346,9 @@
         const cell = document.createElement('div');
         cell.className = 'cell';
         cell.dataset.x = x; cell.dataset.y = y;
+  // Hover listeners
+  cell.addEventListener('mouseenter', () => highlightHover(x, y));
+  cell.addEventListener('mouseleave', () => clearHover());
         gridEl.appendChild(cell);
       }
     }
@@ -479,10 +486,30 @@
         el.classList.toggle('filled', state===1);
         el.classList.toggle('mark', state===2);
         el.classList.remove('wrong');
+        el.classList.remove('hovered','row-hovered','col-hovered'); // always clear on update
       }
     }
     updateBadges();
     updateClueHighlights();
+  }
+  // Hover highlight functions
+  function highlightHover(x, y) {
+    const cells = gridEl.children;
+    for(let yy=0; yy<H; yy++) {
+      for(let xx=0; xx<W; xx++) {
+        const i = yy*W + xx;
+        const el = cells[i];
+        el.classList.toggle('hovered', xx===x && yy===y);
+        el.classList.toggle('row-hovered', yy===y && !(xx===x && yy===y));
+        el.classList.toggle('col-hovered', xx===x && !(xx===x && yy===y));
+      }
+    }
+  }
+  function clearHover() {
+    const cells = gridEl.children;
+    for(let i=0; i<cells.length; i++) {
+      cells[i].classList.remove('hovered','row-hovered','col-hovered');
+    }
   }
 
   function makePuzzle(){
