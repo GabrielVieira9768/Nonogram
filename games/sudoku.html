@@ -1,0 +1,868 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Sudoku — Arcade</title>
+<style>
+  :root{
+    --bg:#0b0f14; --panel:#121821; --muted:#1a2330; --text:#e7eefc;
+    --accent:#6bc2ff; --good:#35d39e; --bad:#ff6b6b; --grid:#2a3545; --ink:#1c2533;
+    --cell:#0f1420; --cell2:#0e1723;
+  --size:54px;
+  --sub-size:14px;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0; background:linear-gradient(180deg,var(--bg),#0a1018);
+    color:var(--text); font:14px/1.25 Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+    display:flex; flex-direction:column; align-items:center; gap:14px; padding:18px;
+  }
+  header{
+    width:100%; max-width:1200px; background:var(--panel); border:1px solid var(--ink);
+    padding:12px; border-radius:16px; box-shadow:0 8px 30px rgba(0,0,0,.35);
+  }
+  header h1{font-size:18px; margin:0 0 10px 0; letter-spacing:.3px}
+  .controls{display:flex; flex-wrap:wrap; gap:10px; align-items:center}
+  .controls .group{display:flex; align-items:center; gap:8px; background:var(--muted); border:1px solid var(--ink); padding:8px 10px; border-radius:12px}
+  label{opacity:.9}
+  /* Switch estilizado para Anotações */
+  /* Estilo select igual ao Nonogram */
+  select#difficulty {
+    min-width:72px;
+    padding-right:28px;
+    appearance:none;
+    -webkit-appearance:none;
+    background-image:linear-gradient(45deg, transparent 50%, var(--text) 50%), linear-gradient(135deg, var(--text) 50%, transparent 50%);
+    background-position: calc(100% - 18px) calc(1em + 2px), calc(100% - 13px) calc(1em + 2px);
+    background-size: 6px 6px, 6px 6px;
+    background-repeat:no-repeat;
+  }
+  select#difficulty:focus {
+    box-shadow:0 0 0 2px #000, 0 0 0 4px rgba(107,194,255,.12);
+  }
+  .switch {
+    display: inline-flex;
+    align-items: center;
+    cursor: pointer;
+    gap: 8px;
+    user-select: none;
+  }
+  .switch input[type="checkbox"] {
+    display: none;
+  }
+  .slider {
+  width: 40px;
+  height: 22px;
+  background: #0c121c;
+  border-radius: 14px;
+  border: 2px solid var(--accent);
+  position: relative;
+  transition: background .18s, border-color .18s;
+  display: flex;
+  align-items: center;
+  }
+  .slider::before {
+  content: "";
+  position: absolute;
+  left: 2px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 16px;
+  height: 16px;
+  background: #6bc2ff;
+  border-radius: 50%;
+  transition: transform .18s;
+  box-shadow: 0 2px 8px rgba(107,194,255,.12);
+  }
+  .switch input[type="checkbox"]:checked + .slider {
+    background: #174f40;
+    border-color: #35d39e;
+  }
+  .switch input[type="checkbox"]:checked + .slider::before {
+  transform: translateX(18px) translateY(-50%);
+  background: #35d39e;
+  }
+  
+  /* Estilo para os botões do Sudoku (igual ao Nonogram) */
+  select, button, input[type="checkbox"]{
+    border:1px solid var(--ink); background:#0c121c; color:var(--text);
+    padding:8px 10px; border-radius:10px; outline:none;
+    cursor: pointer;
+    transition: transform .05s ease, background .2s, filter .2s;
+  }
+  
+  select:focus, button:focus {
+    box-shadow:0 0 0 2px #000, 0 0 0 4px rgba(107,194,255,.25);
+  }
+  
+  button.primary{
+    background:linear-gradient(180deg,#34e6d2,#0f6bb5); 
+    border-color:#0c5b96;
+  }
+  
+  button:hover{
+    filter:brightness(1.12);
+  }
+  
+  button:active {
+    transform: translateY(1px);
+  }
+  
+  /* Botão Gerar Sudoku com efeito especial (igual ao Nonogram) */
+  #gen {
+    position: relative;
+    overflow: hidden;
+    border: 1px solid #0c5b96;
+    background: linear-gradient(180deg, #34e6d2, #0f6bb5);
+  }
+  
+  #gen::before {
+    content: "";
+    position: absolute;
+    inset: -120% -60%;
+    background: conic-gradient(from 0deg, transparent, rgba(107,194,255,.25), transparent 30%);
+    animation: spin 3s linear infinite;
+    filter: blur(10px);
+    opacity: .9;
+  }
+  
+  #gen::after {
+    position: relative;
+    z-index: 1;
+  }
+  
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+  
+  /* Estilo para os botões numéricos do teclado */
+  .kbd button {
+    padding: 8px 10px;
+    border-radius: 8px;
+    border: 1px solid var(--ink);
+    background: #0c121c;
+    color: var(--text);
+    cursor: pointer;
+    transition: transform .05s ease, background .2s, filter .2s;
+  }
+  
+  .kbd button:hover {
+    filter: brightness(1.15);
+  }
+  
+  .kbd button:active {
+    transform: translateY(1px);
+  }
+  
+  .spacer{flex:1}
+  main{
+  width:100%; max-width:1200px; display:flex; flex-direction:column; align-items:center; gap:12px;
+  }
+
+  /* board */
+  .panel {
+  background:var(--panel); border:1px solid var(--ink); border-radius:14px; padding:24px; box-shadow:0 12px 40px rgba(0,0,0,.35);
+  max-width: 600px;
+  width: 100%;
+  margin: 0 auto;
+  }
+  .sudoku-wrap{ display:flex; flex-direction:column; gap:10px; align-items:center; }
+  .board{
+    display:grid;
+    grid-template-columns: repeat(9, var(--size));
+    grid-template-rows: repeat(9, var(--size));
+    gap:2px; padding:8px; background:var(--ink); border-radius:10px;
+  }
+  .cell{
+    width:var(--size); height:var(--size); display:flex; align-items:center; justify-content:center;
+    background:linear-gradient(180deg,var(--cell),var(--cell2));
+    border-radius:6px; position:relative; user-select:none; cursor:pointer;
+    border:1px solid rgba(255,255,255,.03);
+    font-weight:700; font-size:18px; color:var(--text);
+  }
+  .cell.prefilled{background:linear-gradient(180deg,#081018,#0c1724); color:#a9b7c6; cursor:default; opacity:.95}
+  .cell.input{color:#35d39e; background:#e5e9f1; box-shadow: inset 0 -3px 0 rgba(0,0,0,.06) }
+  .cell.conflict{outline:3px solid rgba(255,107,107,.28)}
+  .cell.selected{box-shadow:0 0 0 3px rgba(107,194,255,.12); z-index:2}
+  .cell.same{background:linear-gradient(180deg,rgba(107,194,255,.03),transparent);}
+
+  /* thick lines to separate 3x3 */
+  .board > .cell:nth-child(3n) { margin-right:0; }
+  .board > .cell:nth-child(n) { /* we'll layer heavier borders via :before */ }
+
+  /* pencil marks (9 small numbers) */
+  .candidates{
+  width:100%; height:100%; display:grid; grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(3, 1fr);
+  font-size:var(--sub-size); color:rgba(231,238,252,.8); align-items:center; justify-items:center; gap:0;
+  padding:0;
+  place-items: center;
+  text-align: center;
+  }
+  .candidate{opacity:.9; font-weight:600}
+
+  /* side area */
+  .side{
+    display:flex; flex-direction:column; gap:10px;
+  }
+  .badges{display:flex; gap:8px; flex-wrap:wrap}
+  .badge{padding:8px 12px; border-radius:999px; border:1px solid var(--ink); background:#0c121c; opacity:.9}
+
+  .toast{position:fixed; inset:auto 0 18px 0; display:flex; justify-content:center; pointer-events:none;}
+  .toast > div{pointer-events:auto; background:#0d1826; border:1px solid var(--ink); padding:10px 14px; border-radius:12px; box-shadow:0 10px 30px rgba(0,0,0,.4);}
+
+  /* controls row for small screen */
+  .top-controls{display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:6px}
+
+  .footer-small{font-size:12px; opacity:.8; text-align:center; margin-top:6px}
+  
+  /* modais - estilo igual ao nonogram */
+  .modal-backdrop{position:fixed; inset:0; background:rgba(3,6,10,.6); display:flex; align-items:center; justify-content:center; z-index:50;}
+  .modal{background:var(--panel); border:1px solid var(--ink); padding:18px; border-radius:12px; width:min(520px,95%);}  
+  .modal h2{margin:0 0 8px 0}
+  .modal .actions{display:flex; gap:8px; justify-content:flex-end; margin-top:12px}
+  
+  /* responsive */
+  @media (max-width:960px){
+    main{grid-template-columns:1fr; padding:16px}
+    :root{ --size:40px; --sub-size:11px; }
+  }
+</style>
+</head>
+<body>
+  <!-- Modals - estilo igual ao nonogram -->
+  <div id="confirmHintModal" style="display:none" class="modal-backdrop">
+    <div class="modal">
+      <h2>Usar dica?</h2>
+      <p>Deseja revelar uma célula correta como dica?</p>
+      <div class="actions">
+        <button id="cancelHint">Cancelar</button>
+        <button id="confirmHint" class="primary">Confirmar</button>
+      </div>
+    </div>
+  </div>
+  <div id="confirmClearModal" style="display:none" class="modal-backdrop">
+    <div class="modal">
+      <h2>Confirmar limpeza</h2>
+      <p>Deseja limpar todas as células não fixas?</p>
+      <div class="actions">
+        <button id="cancelClear">Cancelar</button>
+        <button id="confirmClear" class="primary">Confirmar</button>
+      </div>
+    </div>
+  </div>
+  <div id="confirmRevealModal" style="display:none" class="modal-backdrop">
+    <div class="modal">
+      <h2>Revelar solução?</h2>
+      <p>Isso mostrará toda a solução do Sudoku.</p>
+      <div class="actions">
+        <button id="cancelReveal">Cancelar</button>
+        <button id="confirmReveal" class="primary">Revelar</button>
+      </div>
+    </div>
+  </div>
+  <div id="winModal" style="display:none" class="modal-backdrop">
+    <div class="modal" id="winModalContent">
+      <h2>👏 Você venceu!</h2>
+      <div id="winStats"></div>
+      <div class="actions">
+        <button id="closeWin">Fechar</button>
+        <button id="newGameWin" class="primary">Novo Sudoku</button>
+      </div>
+    </div>
+  </div>
+  
+  <header>
+    <h1>🎯 Sudoku — Escolha uma dificuldade</h1>
+    <div class="controls">
+      <div class="group">
+        <label for="difficulty">Dificuldade:</label>
+        <select id="difficulty" aria-label="Dificuldade">
+          <option value="easy">Fácil</option>
+          <option value="medium" selected>Médio</option>
+          <option value="hard">Difícil</option>
+        </select>
+      </div>
+  <!-- Autocandidatos removido -->
+  <button id="gen" class="primary">Gerar Sudoku</button>
+  <span class="spacer"></span>
+  <button id="hint">Dica</button>
+  <button id="clear">Limpar</button>
+  <button id="reveal">Revelar</button>
+    </div>
+  </header>
+
+  <main>
+    <div class="panel sudoku-wrap">
+      <div class="top-controls">
+        <div class="badges">
+          <span class="badge" id="timeBadge">Tempo: 00:00</span>
+          <span class="badge" id="mistakesBadge">Erros: 0</span>
+          <span class="badge" id="filledBadge">Preenchidos: 0/0</span>
+        </div>
+        <span style="flex:1"></span>
+        <label style="display:flex;align-items:center;gap:8px">
+          <span class="switch">
+            <input type="checkbox" id="noteToggle" />
+            <span class="slider"></span>
+            <span>Anotações</span>
+          </span>
+        </label>
+      </div>
+
+      <div class="board" id="board" aria-label="Tabuleiro Sudoku"></div>
+
+      <div style="display:flex;gap:8px;align-items:center">
+        <div class="kbd" id="numPad">
+          <!-- number buttons -->
+        </div>
+        <div style="flex:1"></div>
+        <button id="erase">Apagar</button>
+      </div>
+      <div class="footer-small">Atalhos: N = alternar modo anotações • 1–9 inserir • Backspace/Del apagar • H = dica</div>
+    </div>
+  </main>
+
+  <div class="toast" id="toast" style="display:none"><div></div></div>
+
+<script>
+(() => {
+  // Utilities
+  const $ = sel => document.querySelector(sel);
+  const elBoard = $('#board'), difficultySelect = $('#difficulty');
+  const genBtn = $('#gen'), checkBtn = $('#check'), hintBtn = $('#hint'), clearBtn = $('#clear'), revealBtn = $('#reveal');
+  const timeBadge = $('#timeBadge'), mistakesBadge = $('#mistakesBadge'), filledBadge = $('#filledBadge');
+  const noteToggle = $('#noteToggle'), autoNotesSel = $('#autoNotes');
+  const numPad = $('#numPad'), eraseBtn = $('#erase');
+  const toast = $('#toast');
+
+  // state
+  let board = []; // 9x9 numbers (0 = empty)
+  let solution = []; // full solved grid
+  let candidates = []; // 9x9 sets
+  let prefilled = []; // 9x9 booleans
+  let selected = {x:-1,y:-1};
+  let noteMode = false;
+  let mistakes = 0;
+  let startTime = null, timerInterval = null;
+  let filledCount = 0;
+
+  // init numPad 1..9
+  function initNumPad(){
+    numPad.innerHTML = '';
+    for(let i=1;i<=9;i++){
+      const b = document.createElement('button');
+      b.textContent = i;
+      b.addEventListener('click', ()=> handleInput(i));
+      numPad.appendChild(b);
+    }
+  }
+
+  // Timer
+  function startTimer(){ stopTimer(); startTime = Date.now(); timerInterval = setInterval(updateTimer, 500); }
+  function stopTimer(){ if(timerInterval) clearInterval(timerInterval); timerInterval = null; }
+  function updateTimer(){ if(!startTime) return; const s = Math.floor((Date.now()-startTime)/1000); const mm = String(Math.floor(s/60)).padStart(2,'0'); const ss = String(s%60).padStart(2,'0'); timeBadge.textContent = `Tempo: ${mm}:${ss}`; }
+
+  // Sudoku generator: create full grid via backtracking, then remove numbers according to difficulty
+  function makeEmptyGrid(){ return Array.from({length:9},()=>Array(9).fill(0)); }
+
+  function shuffle(arr){ for(let i=arr.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [arr[i],arr[j]]=[arr[j],arr[i]]; } return arr; }
+
+  function canPlace(grid, r, c, val){
+    for(let i=0;i<9;i++){
+      if(grid[r][i]===val || grid[i][c]===val) return false;
+    }
+    const br = Math.floor(r/3)*3, bc = Math.floor(c/3)*3;
+    for(let y=0;y<3;y++) for(let x=0;x<3;x++) if(grid[br+y][bc+x]===val) return false;
+    return true;
+  }
+
+  function generateSolution(grid){
+    for(let r=0;r<9;r++){
+      for(let c=0;c<9;c++){
+        if(grid[r][c]===0){
+          const nums = shuffle([1,2,3,4,5,6,7,8,9].slice());
+          for(const n of nums){
+            if(canPlace(grid,r,c,n)){
+              grid[r][c]=n;
+              if(generateSolution(grid)) return true;
+              grid[r][c]=0;
+            }
+          }
+          return false;
+        }
+      }
+    }
+    return true; // solved
+  }
+
+  function countSolutions(grid, limit=2){
+    // backtracking with early stop, counts up to limit
+    function helper(g){
+      for(let r=0;r<9;r++){
+        for(let c=0;c<9;c++){
+          if(g[r][c]===0){
+            for(let n=1;n<=9;n++){
+              if(canPlace(g,r,c,n)){
+                g[r][c]=n;
+                if(helper(g)) {
+                  if(solCount>=limit) { g[r][c]=0; return true; }
+                }
+                g[r][c]=0;
+              }
+            }
+            return false;
+          }
+        }
+      }
+      solCount++;
+      return false;
+    }
+    let solCount = 0;
+    helper(grid.map(row=>row.slice()));
+    return solCount;
+  }
+
+  function generatePuzzle(difficulty){
+    // create full solution
+    const g = makeEmptyGrid();
+    generateSolution(g);
+    const full = g.map(r=>r.slice());
+    // removal strategy: try to remove while keeping unique solution
+    const cells = [];
+    for(let r=0;r<9;r++) for(let c=0;c<9;c++) cells.push({r,c});
+    shuffle(cells);
+
+  // difficulty removal counts heuristic
+  // typical clues count: easy ~36-40, medium ~32-36, hard ~26-32
+  let targetClues;
+  if(difficulty==='easy') targetClues = 40;
+  else if(difficulty==='medium') targetClues = 34;
+  else targetClues = 28;
+
+    const puzzle = full.map(r=>r.slice());
+    // remove randomly until clues == targetClues, but try to ensure uniqueness by checking solutions minimal
+    let attempts = 0;
+    while(puzzle.flat().filter(v=>v!==0).length > targetClues && attempts < 2000){
+      const idx = Math.floor(Math.random()*81);
+      const r = Math.floor(idx/9), c = idx%9;
+      if(puzzle[r][c]===0) { attempts++; continue; }
+      const backup = puzzle[r][c];
+      puzzle[r][c]=0;
+
+      // quick uniqueness check: countSolutions (can be slow) - we allow a single-solution requirement
+      const sols = countSolutions(puzzle, 2);
+      if(sols !== 1){
+        puzzle[r][c]=backup; // revert
+      }
+      attempts++;
+    }
+    // if couldn't reach target, it's fine — we return what we have
+    return {puzzle, solution: full};
+  }
+
+  // Rendering
+  function createCellElement(x,y){
+    const d = document.createElement('div');
+    d.className = 'cell';
+    d.dataset.x = x; d.dataset.y = y;
+    d.addEventListener('click', ()=> selectCell(x,y));
+    d.addEventListener('contextmenu', (e)=>{ e.preventDefault(); toggleCandidateAt(x,y); });
+    d.addEventListener('dblclick', ()=>{ // quick clear
+      if(prefilled[y][x]) return;
+      board[y][x]=0; candidates[y][x].clear(); updateView();
+      updateFilledBadge();
+    });
+    return d;
+  }
+
+  function buildBoardDOM(){
+    elBoard.innerHTML = '';
+    for(let y=0;y<9;y++){
+      for(let x=0;x<9;x++){
+        const cellEl = createCellElement(x,y);
+        // Adiciona bordas coloridas para destacar os quadrantes
+        if(x%3===0) cellEl.style.borderLeft = '3px solid #6bc2ff';
+        if(y%3===0) cellEl.style.borderTop = '3px solid #6bc2ff';
+        if(x===8) cellEl.style.borderRight = '3px solid #6bc2ff';
+        if(y===8) cellEl.style.borderBottom = '3px solid #6bc2ff';
+        elBoard.appendChild(cellEl);
+      }
+    }
+  }
+
+  function resetState(){
+    board = makeEmptyGrid();
+    solution = makeEmptyGrid();
+    candidates = Array.from({length:9},()=>Array.from({length:9},()=>new Set()));
+    prefilled = Array.from({length:9},()=>Array(9).fill(false));
+    selected = {x:-1,y:-1};
+    mistakes = 0;
+    startTime = null;
+    stopTimer();
+    timeBadge.textContent = 'Tempo: 00:00';
+    mistakesBadge.textContent = 'Erros: 0';
+    filledBadge.textContent = 'Preenchidos: 0/0';
+  }
+
+  // update DOM based on board/candidates/prefilled selections
+  function updateView(){
+    const cells = elBoard.children;
+    for(let y=0;y<9;y++){
+      for(let x=0;x<9;x++){
+        const i = y*9 + x;
+        const el = cells[i];
+        el.classList.toggle('prefilled', prefilled[y][x]);
+        el.classList.remove('input','conflict','selected','same','wrong-input');
+        el.innerHTML = '';
+        const val = board[y][x];
+        if(val !== 0){
+          const span = document.createElement('div');
+          span.textContent = val;
+          span.style.pointerEvents='none';
+          span.style.fontSize = '18px';
+          span.style.lineHeight = '1';
+          // Se não for prefilled e estiver errado, deixa vermelho
+          if(!prefilled[y][x] && checkImmediateConflict(x, y)) {
+            span.style.color = '#ff6b6b';
+            el.classList.add('wrong-input');
+          }
+          el.appendChild(span);
+          if(!prefilled[y][x]) el.classList.add('input');
+        } else {
+          // show candidates if any
+          const candSet = candidates[y][x];
+          if(candSet.size > 0){
+            const candWrap = document.createElement('div');
+            candWrap.className = 'candidates';
+            for(let n=1;n<=9;n++){
+              const s = document.createElement('div');
+              s.className = 'candidate';
+              s.textContent = candSet.has(n) ? n : '';
+              candWrap.appendChild(s);
+            }
+            el.appendChild(candWrap);
+          }
+        }
+        if(selected.x===x && selected.y===y) el.classList.add('selected');
+      }
+    }
+    highlightRelated();
+    updateFilledBadge();
+  }
+
+  function updateFilledBadge(){
+    const totalFilled = board.flat().filter(v=>v!==0).length;
+    const totalPrefilled = prefilled.flat().filter(v=>v).length;
+    filledCount = totalFilled;
+    const totalToFill = 81;
+    filledBadge.textContent = `Preenchidos: ${totalFilled}/${81}`;
+  }
+
+  function selectCell(x,y){
+    if(selected.x===x && selected.y===y){
+      // toggle off?
+      //selected = {x:-1,y:-1};
+      //return updateView();
+    }
+    selected = {x,y};
+    updateView();
+  }
+
+  function highlightRelated(){
+    if(selected.x===-1) return;
+    const sx = selected.x, sy = selected.y;
+    const cells = elBoard.children;
+    for(let y=0;y<9;y++){
+      for(let x=0;x<9;x++){
+        const i = y*9 + x;
+        const el = cells[i];
+        if(x===sx || y===sy || (Math.floor(x/3)===Math.floor(sx/3) && Math.floor(y/3)===Math.floor(sy/3))){
+          if(!(x===sx && y===sy)) el.classList.add('same');
+        } else el.classList.remove('same');
+      }
+    }
+  }
+
+  // input handling (number or candidate)
+  function handleInput(num){
+    if(selected.x===-1) return flash('Selecione uma célula');
+    const x = selected.x, y = selected.y;
+    if(prefilled[y][x]) return flash('Célula fixa');
+    if(noteMode || noteToggle.checked){
+      // toggle candidate
+      const set = candidates[y][x];
+      if(set.has(num)) set.delete(num); else set.add(num);
+      updateView();
+      return;
+    }
+    // place number and validate
+    board[y][x] = num;
+    candidates[y][x].clear();
+    if(!startTime) startTimer();
+    // optionally autocandidates
+  // Autocandidatos sempre desligado
+    updateView();
+    if(checkImmediateConflict(x,y)) {
+      mistakes++;
+      mistakesBadge.textContent = `Erros: ${mistakes}`;
+      // mark conflict visually briefly
+      markConflictTemporary(x,y);
+    }
+    checkWin();
+  }
+
+  function toggleCandidateAt(x,y){
+    if(prefilled[y][x]) return;
+    // open note toggle
+    if(!noteMode && !noteToggle.checked){
+      noteToggle.checked = true;
+    }
+    // pick a candidate by cycling? We'll open a small prompt of numbers — but to keep simple: toggle 1..9 via prompt
+    // Instead: toggle by picking a random candidate? For simplicity, open a small built-in tiny menu isn't trivial; fallback to toggling number 1 (useful rarely)
+    // Better: toggle nothing but show quick message
+    flash('Clique com número no teclado ou use o botão 1–9 para adicionar/remover candidatos. (Clique-direito alternativa: não configurada)');
+  }
+
+  // erase cell or candidates
+  function eraseSelected(){
+    if(selected.x===-1) return;
+    const x = selected.x, y = selected.y;
+    if(prefilled[y][x]) return flash('Célula fixa');
+    if(noteMode || noteToggle.checked){
+      candidates[y][x].clear();
+    } else {
+      // Só apaga se o número estiver errado
+      if(checkImmediateConflict(x, y)) {
+        board[y][x]=0;
+      }
+    }
+    updateView();
+    updateFilledBadge();
+  }
+
+  function toggleCandidatesForSelected(){
+    if(selected.x===-1) return;
+    const x = selected.x, y = selected.y;
+    candidates[y][x].clear();
+    updateView();
+  }
+
+  // conflict checking
+  function checkImmediateConflict(x,y){
+    const val = board[y][x];
+    if(val===0) return false;
+    // row
+    for(let i=0;i<9;i++) if(i!==x && board[y][i]===val) return true;
+    for(let i=0;i<9;i++) if(i!==y && board[i][x]===val) return true;
+    const br = Math.floor(y/3)*3, bc = Math.floor(x/3)*3;
+    for(let dy=0;dy<3;dy++) for(let dx=0;dx<3;dx++){
+      const yy = br+dy, xx = bc+dx;
+      if(yy===y && xx===x) continue;
+      if(board[yy][xx]===val) return true;
+    }
+    return false;
+  }
+
+  function markConflictTemporary(x,y){
+    const cells = elBoard.children;
+    const i = y*9+x;
+    const el = cells[i];
+    el.classList.add('conflict');
+    setTimeout(()=> el.classList.remove('conflict'), 900);
+  }
+
+  function checkAllErrors(){
+    let mistakesFound = 0;
+    const cells = elBoard.children;
+    // clear all conflict marks
+    for(let c of cells) c.classList.remove('conflict');
+    for(let y=0;y<9;y++){
+      for(let x=0;x<9;x++){
+        if(board[y][x]===0) continue;
+        const ok = !checkImmediateConflict(x,y);
+        if(!ok){
+          mistakesFound++;
+          cells[y*9+x].classList.add('conflict');
+        }
+      }
+    }
+    if(mistakesFound>0){ mistakes += mistakesFound; mistakesBadge.textContent = `Erros: ${mistakes}`; flash(`⚠️ ${mistakesFound} erro(s) detectado(s)`); }
+    else flash('Nenhum erro encontrado');
+    setTimeout(()=>{ for(let c of cells) c.classList.remove('conflict'); }, 900);
+  }
+
+  // hint: reveal one empty cell (respects prefilled)
+  function giveHint(){
+    if(!solution || !solution.flat().some(v=>v!==0)) return flash('Sem solução disponível');
+    // choose a random empty non-prefilled cell
+    const empties = [];
+    for(let y=0;y<9;y++) for(let x=0;x<9;x++) if(board[y][x]===0) empties.push({x,y});
+    if(empties.length===0) return flash('Tabuleiro já completo');
+    const choice = empties[Math.floor(Math.random()*empties.length)];
+    board[choice.y][choice.x] = solution[choice.y][choice.x];
+    candidates[choice.y][choice.x].clear();
+    updateView();
+    if(autoNotesSel.value==='on') recalcAllCandidates();
+    checkWin();
+  }
+
+  // reveal solution fully
+  function revealSolution(){
+    for(let y=0;y<9;y++) for(let x=0;x<9;x++){
+      board[y][x] = solution[y][x];
+      candidates[y][x].clear();
+    }
+    updateView();
+    checkWin();
+  }
+
+  // check win
+  function checkWin(){
+    // board fully filled and matches solution
+    if(board.flat().every(v=>v!==0) && board.flat().every((v,i)=> v === solution.flat()[i])){
+      stopTimer();
+      showWinModal();
+      return true;
+    }
+    return false;
+  }
+
+  function showWinModal(){
+    document.getElementById('winStats').innerHTML = `Tempo: <strong>${timeBadge.textContent.replace('Tempo: ','')}</strong><br>Erros totais: <strong>${mistakes}</strong><br>Preenchidos: ${filledCount}/81`;
+    document.getElementById('winModal').style.display = 'flex';
+  }
+
+  // candidates recalculation: for each empty cell, fill candidates with numbers not present in row/col/box
+  function recalcAllCandidates(){
+    for(let y=0;y<9;y++){
+      for(let x=0;x<9;x++){
+        if(board[y][x]!==0) { candidates[y][x].clear(); continue; }
+        const set = candidates[y][x];
+        set.clear();
+        for(let n=1;n<=9;n++){
+          if(canPlace(board,y,x,n)) set.add(n);
+        }
+      }
+    }
+    updateView();
+  }
+
+  // flash message
+  function flash(text, type=''){
+    const box = toast.firstElementChild;
+    box.textContent = text;
+    box.className = type;
+    toast.style.display = 'flex';
+    setTimeout(()=> toast.style.display='none', 1400);
+  }
+
+  // event binding
+  function bindEvents(){
+    genBtn.addEventListener('click', ()=> {
+      const diff = difficultySelect.value;
+      resetState();
+      const {puzzle, solution:sol} = generatePuzzle(diff);
+      board = puzzle.map(r=>r.slice());
+      solution = sol.map(r=>r.slice());
+      prefilled = board.map(r=>r.map(v=> v !== 0));
+      candidates = Array.from({length:9},()=>Array.from({length:9},()=>new Set()));
+      buildBoardDOM();
+      updateView();
+      startTimer();
+      flash('Novo Sudoku gerado');
+    });
+
+    // MODAIS para dica, limpar e revelar
+    hintBtn.addEventListener('click', ()=> {
+      document.getElementById('confirmHintModal').style.display = 'flex';
+    });
+    document.getElementById('cancelHint').onclick = () => {
+      document.getElementById('confirmHintModal').style.display = 'none';
+    };
+    document.getElementById('confirmHint').onclick = () => {
+      document.getElementById('confirmHintModal').style.display = 'none';
+      giveHint();
+    };
+
+    clearBtn.addEventListener('click', ()=> {
+      document.getElementById('confirmClearModal').style.display = 'flex';
+    });
+    document.getElementById('cancelClear').onclick = () => {
+      document.getElementById('confirmClearModal').style.display = 'none';
+    };
+    document.getElementById('confirmClear').onclick = () => {
+      document.getElementById('confirmClearModal').style.display = 'none';
+      for(let y=0;y<9;y++) for(let x=0;x<9;x++){
+        if(!prefilled[y][x]) {
+          // Limpa anotações sempre
+          candidates[y][x].clear();
+          // Limpa apenas números errados (em conflito)
+          if(checkImmediateConflict(x, y)) board[y][x]=0;
+        }
+      }
+      updateView(); flash('Anotações e números errados limpos');
+    };
+
+    revealBtn.addEventListener('click', ()=> {
+      document.getElementById('confirmRevealModal').style.display = 'flex';
+    });
+    document.getElementById('cancelReveal').onclick = () => {
+      document.getElementById('confirmRevealModal').style.display = 'none';
+    };
+    document.getElementById('confirmReveal').onclick = () => {
+      document.getElementById('confirmRevealModal').style.display = 'none';
+      revealSolution();
+    };
+
+    // Win modal
+    document.getElementById('closeWin').onclick = () => {
+      document.getElementById('winModal').style.display = 'none';
+    };
+    document.getElementById('newGameWin').onclick = () => {
+      document.getElementById('winModal').style.display = 'none';
+      genBtn.click();
+    };
+
+  eraseBtn.addEventListener('click', ()=> eraseSelected());
+
+    // keyboard
+    window.addEventListener('keydown', (e)=>{
+      if(e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
+      if(e.key==='n' || e.key==='N'){ noteToggle.checked = !noteToggle.checked; flash(`Modo anotações: ${noteToggle.checked ? 'ON':'OFF'}`); }
+      if(e.key>='1' && e.key<='9'){ handleInput(parseInt(e.key,10)); }
+      if(e.key==='Backspace' || e.key==='Delete'){ eraseSelected(); }
+      if(e.key==='h' || e.key==='H'){ giveHint(); }
+      if(e.key==='c' || e.key==='C'){ checkAllErrors(); }
+      // arrow keys to move
+      if(['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.key)){
+        e.preventDefault();
+        if(selected.x===-1) selected={x:0,y:0};
+        if(e.key==='ArrowLeft') selected.x = (selected.x + 8) % 9;
+        if(e.key==='ArrowRight') selected.x = (selected.x + 1) % 9;
+        if(e.key==='ArrowUp') selected.y = (selected.y + 8) % 9;
+        if(e.key==='ArrowDown') selected.y = (selected.y + 1) % 9;
+        updateView();
+      }
+    });
+
+    // click board to select — handled per cell
+  }
+
+  // on load
+  initNumPad();
+  resetState();
+  buildBoardDOM();
+  bindEvents();
+
+  // generate initial puzzle
+  genBtn.click();
+
+  // small helper: mark conflicts when checking all
+  // done above
+
+})();
+</script>
+</body>
+</html>
