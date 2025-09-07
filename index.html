@@ -79,7 +79,7 @@
   .cell.filled{background:#e7eefc; color:#0b1220}
   /* Hover highlight */
   .cell.hovered { box-shadow:0 0 0 2px var(--accent), 0 0 12px rgba(107,194,255,.18); z-index:2; }
-  .cell.row-hovered, .cell.col-hovered {
+  .cell.row-hovered:not(.filled):not(.mark), .cell.col-hovered:not(.filled):not(.mark) {
     background:linear-gradient(90deg,rgba(107,194,255,.04),transparent 70%);
     transition:background .18s;
   }
