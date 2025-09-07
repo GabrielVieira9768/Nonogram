@@ -146,6 +146,7 @@
     color: var(--text);
     cursor: pointer;
     transition: transform .05s ease, background .2s, filter .2s;
+  position: relative; /* needed for hold overlay */
   }
   
   .kbd button:hover {
@@ -155,6 +156,27 @@
   .kbd button:active {
     transform: translateY(1px);
   }
+  /* destaque para número ativo */
+  .kbd button.active{
+    background: linear-gradient(180deg,#34e6d2,#0f6bb5);
+    color: #071526;
+    border-color: #0c5b96;
+    box-shadow: 0 6px 18px rgba(11,34,54,.24);
+  }
+
+  /* hold progress overlay: fills during long-press */
+  .kbd button::before{
+    content:'';
+    position:absolute; inset:0; left:0; top:0; right:0; bottom:0;
+    background: linear-gradient(90deg, rgba(107,194,255,.12), rgba(255,255,255,.03));
+    transform-origin: left;
+    transform: scaleX(0);
+    transition: transform 350ms linear;
+    border-radius: 8px;
+    pointer-events: none;
+    opacity: .98;
+  }
+  .kbd button.holding::before{ transform: scaleX(1); }
   
   .spacer{flex:1}
   main{
@@ -282,6 +304,7 @@
           <option value="easy">Fácil</option>
           <option value="medium" selected>Médio</option>
           <option value="hard">Difícil</option>
+          <option value="especialista">Especialista</option>
         </select>
       </div>
   <!-- Autocandidatos removido -->
@@ -320,7 +343,7 @@
         <div style="flex:1"></div>
         <button id="erase">Apagar</button>
       </div>
-      <div class="footer-small">Atalhos: N = alternar modo anotações • 1–9 inserir • Backspace/Del apagar • H = dica</div>
+  <div class="footer-small">Atalhos: N = alternar anotações • 1–9 inserir • Alt+1–9 selecionar número • Esc desmarcar • Backspace/Del apagar • H = dica</div>
     </div>
   </main>
 
@@ -335,6 +358,7 @@
   const timeBadge = $('#timeBadge'), mistakesBadge = $('#mistakesBadge'), filledBadge = $('#filledBadge');
   const noteToggle = $('#noteToggle'), autoNotesSel = $('#autoNotes');
   const numPad = $('#numPad'), eraseBtn = $('#erase');
+  let activeNumber = null; // número selecionado no numPad (ou null)
   const toast = $('#toast');
 
   // state
@@ -354,9 +378,76 @@
     for(let i=1;i<=9;i++){
       const b = document.createElement('button');
       b.textContent = i;
-      b.addEventListener('click', ()=> handleInput(i));
+      b.dataset.n = i;
+      // long-press vs short click
+      let pressTimer = null;
+      let longPressed = false;
+      const LONG_MS = 350;
+
+      function startPress(e){
+        e.preventDefault();
+        longPressed = false;
+        b.classList.add('holding');
+        pressTimer = setTimeout(()=>{
+          longPressed = true;
+          // toggle seleção persistente
+          toggleActiveNumber(i, b);
+          b.classList.remove('holding');
+        }, LONG_MS);
+      }
+      function endPress(e){
+        e.preventDefault();
+        if(pressTimer) clearTimeout(pressTimer);
+        pressTimer = null;
+        b.classList.remove('holding');
+        // se não foi long press, trata como clique curto: preenche apenas a célula selecionada
+        if(!longPressed){
+          // se o número clicado é o que está ativo, apenas desativa (um clique para sair do modo)
+          if(activeNumber === i){
+            activeNumber = null;
+            [...numPad.children].forEach(b=>b.classList.remove('active'));
+            return flash(`Número ${i} desmarcado`);
+          }
+          // se outro número estava selecionado persistentemente, desativa-o ao clicar em outro número
+          if(activeNumber !== null && activeNumber !== i){
+            activeNumber = null;
+            [...numPad.children].forEach(b=>b.classList.remove('active'));
+          }
+          // agora checa seleção de célula e preenche se houver
+          if(selected.x===-1) return flash('Selecione uma célula');
+          handleInput(i);
+        }
+      }
+
+      b.addEventListener('mousedown', startPress);
+      b.addEventListener('mouseup', endPress);
+  b.addEventListener('mouseleave', ()=>{ if(pressTimer) { clearTimeout(pressTimer); pressTimer=null; } b.classList.remove('holding'); });
+  // touch support
+  b.addEventListener('touchstart', startPress, {passive:false});
+  b.addEventListener('touchend', endPress);
+  b.addEventListener('touchcancel', ()=>{ if(pressTimer) { clearTimeout(pressTimer); pressTimer=null; } b.classList.remove('holding'); });
+  // pointer cancel for broader compatibility
+  b.addEventListener('pointercancel', ()=>{ if(pressTimer) { clearTimeout(pressTimer); pressTimer=null; } b.classList.remove('holding'); });
+
+      // prevent default click which may trigger after touch
+      b.addEventListener('click', (e)=> e.preventDefault());
+
       numPad.appendChild(b);
     }
+  }
+
+  function toggleActiveNumber(n, btn){
+    // se já ativo, desativa
+    if(activeNumber === n){
+      activeNumber = null;
+      // remover classe active de todos
+      [...numPad.children].forEach(b=>b.classList.remove('active'));
+      flash(`Número ${n} desmarcado`);
+      return;
+    }
+    activeNumber = n;
+    [...numPad.children].forEach(b=> b.classList.toggle('active', +b.dataset.n === n));
+    flash(`Número ${n} selecionado`);
   }
 
   // Timer
@@ -398,29 +489,49 @@
   }
 
   function countSolutions(grid, limit=2){
-    // backtracking with early stop, counts up to limit
-    function helper(g){
-      for(let r=0;r<9;r++){
-        for(let c=0;c<9;c++){
-          if(g[r][c]===0){
-            for(let n=1;n<=9;n++){
-              if(canPlace(g,r,c,n)){
-                g[r][c]=n;
-                if(helper(g)) {
-                  if(solCount>=limit) { g[r][c]=0; return true; }
-                }
-                g[r][c]=0;
-              }
-            }
-            return false;
+    // Improved solver: backtracking with MRV (minimum remaining values) heuristic and early stop.
+    // Returns the number of solutions up to `limit` (stops counting when >= limit).
+    const g = grid.map(r=>r.slice());
+    let solCount = 0;
+
+    function findBestCell(){
+      let best = null;
+      let bestOptions = 10;
+      for(let y=0;y<9;y++){
+        for(let x=0;x<9;x++){
+          if(g[y][x]!==0) continue;
+          // compute legal options count
+          let opts = 0;
+          for(let n=1;n<=9;n++) if(canPlace(g,y,x,n)) opts++;
+          if(opts === 0) return {x,y,opts}; // dead end
+          if(opts < bestOptions){ bestOptions = opts; best = {x,y,opts};
+            if(opts === 1) return best; // can't get better than 1
           }
         }
       }
-      solCount++;
-      return false;
+      return best;
     }
-    let solCount = 0;
-    helper(grid.map(row=>row.slice()));
+
+    function helper(){
+      if(solCount >= limit) return;
+      const cell = findBestCell();
+      if(cell === null){ // no empty cells -> found a solution
+        solCount++;
+        return;
+      }
+      if(cell.opts === 0) return; // dead end
+      const {x,y} = cell;
+      // try values in random-ish order may help; use fixed order for determinism
+      for(let n=1;n<=9;n++){
+        if(!canPlace(g,y,x,n)) continue;
+        g[y][x] = n;
+        helper();
+        g[y][x] = 0;
+        if(solCount >= limit) return;
+      }
+    }
+
+    helper();
     return solCount;
   }
 
@@ -434,27 +545,37 @@
     for(let r=0;r<9;r++) for(let c=0;c<9;c++) cells.push({r,c});
     shuffle(cells);
 
-  // difficulty removal counts heuristic
-  // typical clues count: easy ~36-40, medium ~32-36, hard ~26-32
-  let targetClues;
-  if(difficulty==='easy') targetClues = 40;
-  else if(difficulty==='medium') targetClues = 34;
-  else targetClues = 28;
+  // difficulty removal ranges (min..max clues). We'll pick a random target in the range
+  // typical clues count ranges: easy 36-40, medium 32-36, hard 26-32, especialista 18-24
+  let minClues, maxClues;
+  if(difficulty==='easy'){ minClues = 36; maxClues = 40; }
+  else if(difficulty==='medium'){ minClues = 32; maxClues = 36; }
+  else if(difficulty==='hard'){ minClues = 26; maxClues = 32; }
+  else { /* especialista */ minClues = 18; maxClues = 24; }
+  const targetClues = Math.floor(Math.random() * (maxClues - minClues + 1)) + minClues;
 
     const puzzle = full.map(r=>r.slice());
-    // remove randomly until clues == targetClues, but try to ensure uniqueness by checking solutions minimal
+    // removal strategy: try removals in random order while keeping uniqueness.
+    // We'll pick a random target within the difficulty range and attempt removals up to a high attempt limit.
     let attempts = 0;
-    while(puzzle.flat().filter(v=>v!==0).length > targetClues && attempts < 2000){
-      const idx = Math.floor(Math.random()*81);
+    const maxAttempts = 5000;
+    let currentClues = puzzle.flat().filter(v=>v!==0).length;
+    // prepare randomized order of cell indices
+    let indices = shuffle(Array.from({length:81},(_,i)=>i));
+    let ptr = 0;
+    while(currentClues > targetClues && attempts < maxAttempts){
+      if(ptr >= indices.length){ indices = shuffle(indices); ptr = 0; }
+      const idx = indices[ptr++];
       const r = Math.floor(idx/9), c = idx%9;
-      if(puzzle[r][c]===0) { attempts++; continue; }
+      if(puzzle[r][c]===0){ attempts++; continue; }
       const backup = puzzle[r][c];
-      puzzle[r][c]=0;
-
-      // quick uniqueness check: countSolutions (can be slow) - we allow a single-solution requirement
+      puzzle[r][c] = 0;
+      // uniqueness check: if removal creates multiple solutions, revert
       const sols = countSolutions(puzzle, 2);
       if(sols !== 1){
-        puzzle[r][c]=backup; // revert
+        puzzle[r][c] = backup; // revert
+      } else {
+        currentClues--;
       }
       attempts++;
     }
@@ -467,7 +588,18 @@
     const d = document.createElement('div');
     d.className = 'cell';
     d.dataset.x = x; d.dataset.y = y;
-    d.addEventListener('click', ()=> selectCell(x,y));
+    d.addEventListener('click', ()=> {
+      // se há um número ativo no numPad, usá-lo para preencher (respeita notas)
+      if(activeNumber !== null){
+        if(prefilled[y][x]) return flash('Célula fixa');
+        // seleciona celula para que handleInput funcione corretamente
+        selected = {x,y};
+        handleInput(activeNumber);
+        return;
+      }
+      // caso contrário, seleciona a célula normalmente
+      selectCell(x,y);
+    });
     d.addEventListener('contextmenu', (e)=>{ e.preventDefault(); toggleCandidateAt(x,y); });
     d.addEventListener('dblclick', ()=>{ // quick clear
       if(prefilled[y][x]) return;
@@ -831,7 +963,17 @@
     window.addEventListener('keydown', (e)=>{
       if(e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
       if(e.key==='n' || e.key==='N'){ noteToggle.checked = !noteToggle.checked; flash(`Modo anotações: ${noteToggle.checked ? 'ON':'OFF'}`); }
-      if(e.key>='1' && e.key<='9'){ handleInput(parseInt(e.key,10)); }
+      // 1-9 press -> fill selected cell
+      if(e.key>='1' && e.key<='9' && !e.altKey){ handleInput(parseInt(e.key,10)); }
+      // Alt+1..9 toggles persistent selection for that number
+      if(e.altKey && e.key>='1' && e.key<='9'){
+        const n = parseInt(e.key,10);
+        const btn = [...numPad.children].find(b=>+b.dataset.n===n);
+        if(btn) toggleActiveNumber(n, btn);
+      }
+      if(e.key==='Escape'){
+        activeNumber = null; [...numPad.children].forEach(b=>b.classList.remove('active'));
+      }
       if(e.key==='Backspace' || e.key==='Delete'){ eraseSelected(); }
       if(e.key==='h' || e.key==='H'){ giveHint(); }
       if(e.key==='c' || e.key==='C'){ checkAllErrors(); }
