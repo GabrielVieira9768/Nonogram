@@ -1,672 +1,115 @@
 <!DOCTYPE html>
 <html lang="pt-br">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Nonogram — (5–25)</title>
-<style>
-  :root{
-    --bg:#0b0f14; --panel:#121821; --muted:#1a2330; --text:#e7eefc;
-    --accent:#6bc2ff; --good:#35d39e; --bad:#ff6b6b; --grid:#2a3545; --ink:#1c2533;
-    --cell:#0f1420; --cell2:#0e1723;
-    --aqua:#34e6d2; 
-    --size:30px;
-  }
-  *{box-sizing:border-box}
-  html,body{height:100%}
-  body{
-    margin:0; background:linear-gradient(180deg,var(--bg),#0a1018);
-    color:var(--text); font:14px/1.25 Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
-    display:flex; flex-direction:column; align-items:center; gap:14px; padding:18px;
-  }
-  header{
-    width:100%; max-width:1200px; background:var(--panel); border:1px solid var(--ink);
-    padding:12px; border-radius:16px; box-shadow:0 8px 30px rgba(0,0,0,.35);
-  }
-  header h1{font-size:18px; margin:0 0 10px 0; letter-spacing:.3px}
-  .controls{display:flex; flex-wrap:wrap; gap:10px; align-items:center}
-  .controls .group{display:flex; align-items:center; gap:8px; background:var(--muted); border:1px solid var(--ink); padding:8px 10px; border-radius:12px}
-  label{opacity:.9}
-  select, button{
-    border:1px solid var(--ink); background:#0c121c; color:var(--text);
-    padding:8px 10px; border-radius:10px; outline:none;
-  }
-  /* improved select styling */
-  select{ min-width:72px; padding-right:28px; appearance:none; -webkit-appearance:none; background-image:linear-gradient(45deg, transparent 50%, var(--text) 50%), linear-gradient(135deg, var(--text) 50%, transparent 50%); background-position: calc(100% - 18px) calc(1em + 2px), calc(100% - 13px) calc(1em + 2px); background-size: 6px 6px, 6px 6px; background-repeat:no-repeat; }
-
-  select:focus{box-shadow:0 0 0 2px #000, 0 0 0 4px rgba(107,194,255,.12)}
-  button:focus{box-shadow:0 0 0 2px #000, 0 0 0 4px rgba(107,194,255,.25)}
-  button{cursor:pointer; transition:transform .05s ease, background .2s, filter .2s}
-  button.primary{background:linear-gradient(180deg,#34e6d2,#0f6bb5); border-color:#0c5b96}
-  button:hover{filter:brightness(1.15)}
-  button:active{transform:translateY(1px)}
-  .spacer{flex:1}
-  .legend{opacity:.85}
-  main{
-    width:100%; max-width:1200px; display:grid; gap:12px; grid-template-columns:1fr;
-  }
-
-  /* Board layout */
-  .board-wrap{
-    display:inline-block; margin:auto; background:var(--panel); border:1px solid var(--ink);
-    border-radius:16px; padding:12px; box-shadow:0 12px 40px rgba(0,0,0,.35);
-    transition:width .18s ease; overflow:hidden;
-  }
-  .layout{
-    display:grid; gap:0;
-    grid-template-columns: auto auto;
-    grid-template-rows: auto auto;
-    grid-template-areas:
-      "corner top"
-      "left   grid";
-    align-items:start;
-  }
-  .corner{grid-area:corner; background:var(--panel)}
-  .top{grid-area:top; display:grid; align-items:end}
-  .left{grid-area:left; display:grid; align-content:center}
-  .grid{grid-area:grid; display:grid; background:var(--ink); padding:6px; border-radius:10px}
-
-  .cell{
-    width:var(--size); height:var(--size);
-    background:var(--cell);
-    display:flex; align-items:center; justify-content:center;
-    border:1px solid var(--grid);
-    user-select:none; -webkit-user-select:none;
-    transition:background .12s ease, outline .12s ease;
-    cursor:pointer;
-  }
-  .cell:nth-child(even){background:var(--cell2)}
-  .cell.filled{background:#e7eefc; color:#0b1220}
-  /* Hover highlight */
-  .cell.hovered { box-shadow:0 0 0 2px var(--accent), 0 0 12px rgba(107,194,255,.18); z-index:2; }
-  .cell.row-hovered:not(.filled):not(.mark), .cell.col-hovered:not(.filled):not(.mark) {
-    background:linear-gradient(90deg,rgba(107,194,255,.04),transparent 70%);
-    transition:background .18s;
-  }
-  .cell.mark::after{content:"×"; font-weight:700; opacity:.85}
-  .cell.wrong{outline:2px solid var(--bad)}
-  .cell.locked{opacity:1; box-shadow:inset 0 0 0 2px rgba(181, 49, 199, 0.219); cursor:default}
-
-  .top .clue-col{display:flex; flex-direction:column; gap:4px; align-items:center; justify-content:flex-end; padding:0 6px}
-  .left .clue-row{display:flex; gap:6px; align-items:center; justify-content:flex-end; padding:6px 8px}
-  .clue{
-    min-width:20px; min-height:20px; padding:2px 6px; border-radius:6px;
-    background:#0d1522; border:1px solid #122033; color:var(--text); font-weight:600; font-size:12px;
-    transition:color .12s ease, border-color .12s ease, box-shadow .12s ease, background .12s ease;
-  }
-  .clue.zero{opacity:.55}
-  .clue.ok{background:rgba(53,211,158,.16); border-color:#1f614e}
-  .clue.hit{background:rgba(107,194,255,.14); border-color:#1b4f73}
-  /* verde-água para contemplados */
-  .clue.contemplated{color:var(--aqua); border-color:rgba(52,230,210,.55); box-shadow:inset 0 -4px 0 rgba(52,230,210,.18)}
-
-  .row-locked{outline:3px solid rgba(53,211,158,.25); border-radius:10px; background:linear-gradient(90deg,rgba(53,211,158,.06),transparent)}
-  .col-locked{outline:3px solid rgba(107,194,255,.22); border-radius:8px; background:linear-gradient(180deg,rgba(107,194,255,.06),transparent)}
-
-  .foot{
-    margin-top:10px; display:flex; gap:10px; align-items:center; justify-content:center; flex-wrap:wrap;
-  }
-  .badge{padding:6px 10px; border-radius:999px; border:1px solid var(--ink); background:#0c121c; opacity:.9}
-  .hint{opacity:.8}
-  .toast{
-    position:fixed; inset:auto 0 18px 0; display:flex; justify-content:center; pointer-events:none;
-  }
-  .toast > div{
-    pointer-events:auto; background:#0d1826; border:1px solid var(--ink);
-    padding:10px 14px; border-radius:12px; box-shadow:0 10px 30px rgba(0,0,0,.4);
-  }
-  .win{border-color:#174f40; background:#0f1f1a}
-  .lose{border-color:#5a1e1e; background:#1a1212}
-  .tiny{font-size:12px; opacity:.85}
-
-  /* modals */
-  .modal-backdrop{position:fixed; inset:0; background:rgba(3,6,10,.6); display:flex; align-items:center; justify-content:center; z-index:50;}
-  .modal{background:var(--panel); border:1px solid var(--ink); padding:18px; border-radius:12px; width:min(520px,95%);}  
-  .modal h2{margin:0 0 8px 0}
-  .modal .actions{display:flex; gap:8px; justify-content:flex-end; margin-top:12px}
-
-  /* botão gerar mais estilizado */
-  #gen{
-    position:relative; overflow:hidden; border:1px solid #0c5b96;
-    background:linear-gradient(180deg,#34e6d2,#0f6bb5);
-  }
-  #gen::before{
-    content:""; position:absolute; inset:-120% -60%; background:conic-gradient(from 0deg, transparent, rgba(107,194,255,.25), transparent 30%);
-    animation:spin 3s linear infinite; filter:blur(10px); opacity:.9;
-  }
-  #gen::after{
-    content:"Gerar puzzle"; position:relative; z-index:1;
-  }
-  @keyframes spin{to{transform:rotate(360deg)}}
-</style>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>🎮 Arcade — Menu de Jogos</title>
+  <style>
+    :root {
+      --bg:#0b0f14; --panel:#121821; --muted:#1a2330; --text:#e7eefc;
+      --accent:#6bc2ff; --good:#35d39e; --bad:#ff6b6b; --ink:#1c2533;
+    }
+    *{box-sizing:border-box;margin:0;padding:0}
+    body {
+      background:linear-gradient(180deg,var(--bg),#0a1018);
+      color:var(--text);
+      font:15px/1.4 Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      min-height:100vh; display:flex; flex-direction:column;
+    }
+    header {
+      background:var(--panel); border-bottom:1px solid var(--ink);
+      padding:16px 24px; text-align:center;
+      box-shadow:0 6px 20px rgba(0,0,0,.3);
+    }
+    header h1 {font-size:20px; letter-spacing:.5px}
+    main {
+      flex:1; display:grid;
+      grid-template-columns:repeat(auto-fit,minmax(260px,1fr));
+      gap:18px; padding:24px; max-width:1200px; margin:auto;
+      width:100%;
+    }
+    .card {
+      background:var(--panel);
+      border:1px solid var(--ink);
+      border-radius:18px;
+      padding:18px;
+      display:flex; flex-direction:column;
+      box-shadow:0 10px 30px rgba(0,0,0,.35);
+      transition:transform .15s ease, filter .2s ease;
+    }
+    .card:hover {transform:translateY(-3px); filter:brightness(1.08);}
+    .card h2 {
+      font-size:18px; margin-bottom:8px;
+    }
+    .card p {
+      flex:1; opacity:.85; font-size:14px; margin-bottom:14px;
+    }
+    .btn {
+      display:inline-block; text-align:center;
+      padding:10px 14px; border-radius:12px;
+      background:linear-gradient(180deg,#34e6d2,#0f6bb5);
+      border:1px solid #0c5b96; color:#fff; font-weight:600;
+      cursor:pointer; text-decoration:none; transition:filter .2s;
+    }
+    .btn:hover {filter:brightness(1.15);}
+    footer {
+      text-align:center; padding:12px; font-size:13px; opacity:.65;
+    }
+  </style>
 </head>
 <body>
   <header>
-    <h1>🧩 Nonogram</h1>
-    <div class="controls">
-      <div class="group">
-        <label for="w">Largura:</label>
-        <select id="w" aria-label="Largura">
-          <option>5</option><option selected>10</option><option>15</option><option>20</option><option>25</option>
-        </select>
-      </div>
-      <div class="group">
-        <label for="h">Altura:</label>
-        <select id="h" aria-label="Altura">
-          <option>5</option><option selected>10</option><option>15</option><option>20</option><option>25</option>
-        </select>
-      </div>
-      <div class="group">
-        <label for="dens">Densidade:</label>
-        <select id="dens" aria-label="Densidade">
-          <option value="0.40">Leve</option>
-          <option value="0.55" selected>Média</option>
-          <option value="0.70">Alta</option>
-        </select>
-      </div>
-      <button id="gen" class="primary"></button>
-      <span class="spacer"></span>
-      <button id="check">Checar progresso</button>
-      <button id="clear">Limpar</button>
-      <button id="reveal">Revelar solução</button>
-      <span class="legend tiny">Clique: pinta → X → vazio | Botão direito: X</span>
-    </div>
+    <h1>🎮 Arcade de Jogos</h1>
   </header>
 
   <main>
-    <div class="board-wrap" id="boardWrap">
-      <div id="board" class="layout">
-        <div class="corner"></div>
-        <div class="top" id="cluesTop"></div>
-        <div class="left" id="cluesLeft"></div>
-        <div class="grid" id="grid"></div>
-      </div>
-      <div class="foot">
-        <span class="badge" id="sizeBadge">—</span>
-        <span class="badge" id="fillsBadge">—</span>
-        <span class="badge" id="timeBadge">Tempo: 00:00</span>
-        <span class="badge" id="errorsBadge">Erros: 0</span>
-        <span class="hint tiny">Dica: pressione e arraste para pintar várias células.</span>
-      </div>
+    <!-- Nonogram -->
+    <div class="card">
+      <h2>🧩 Nonogram</h2>
+      <p>Resolva puzzles de lógica pintando os quadrados corretos. Desafie-se em diferentes tamanhos e dificuldades!</p>
+      <a href="games/nonogram.html" class="btn">Jogar</a>
+    </div>
+
+    <!-- Exemplo de outro jogo (placeholder) -->
+    <div class="card">
+      <h2>🚧 Sudoku</h2>
+      <p>Espaço reservado para adicionar outro jogo no futuro. Basta duplicar este card e ajustar o link.</p>
+      <a href="games/sudoku.html" class="btn">Jogar</a>
+    </div>
+    <div class="card">
+      <h2>🚧 Jogo Futuro</h2>
+      <p>Espaço reservado para adicionar outro jogo no futuro. Basta duplicar este card e ajustar o link.</p>
+      <a href="#" class="btn">Em breve</a>
+    </div>
+    <div class="card">
+      <h2>🚧 Jogo Futuro</h2>
+      <p>Espaço reservado para adicionar outro jogo no futuro. Basta duplicar este card e ajustar o link.</p>
+      <a href="#" class="btn">Em breve</a>
+    </div>
+    <div class="card">
+      <h2>🚧 Jogo Futuro</h2>
+      <p>Espaço reservado para adicionar outro jogo no futuro. Basta duplicar este card e ajustar o link.</p>
+      <a href="#" class="btn">Em breve</a>
+    </div>
+    <div class="card">
+      <h2>🚧 Jogo Futuro</h2>
+      <p>Espaço reservado para adicionar outro jogo no futuro. Basta duplicar este card e ajustar o link.</p>
+      <a href="#" class="btn">Em breve</a>
+    </div>
+    <div class="card">
+      <h2>🚧 Jogo Futuro</h2>
+      <p>Espaço reservado para adicionar outro jogo no futuro. Basta duplicar este card e ajustar o link.</p>
+      <a href="#" class="btn">Em breve</a>
+    </div>
+    <div class="card">
+      <h2>🚧 Jogo Futuro</h2>
+      <p>Espaço reservado para adicionar outro jogo no futuro. Basta duplicar este card e ajustar o link.</p>
+      <a href="#" class="btn">Em breve</a>
     </div>
   </main>
 
-  <div class="toast" id="toast" style="display:none"><div></div></div>
-
-  <!-- Modals -->
-  <div id="confirmClearModal" style="display:none" class="modal-backdrop">
-    <div class="modal">
-      <h2>Confirmar limpeza</h2>
-      <p>Deseja realmente limpar o tabuleiro? Linhas/colunas já finalizadas não serão afetadas.</p>
-      <div class="actions">
-        <button id="cancelClear">Cancelar</button>
-        <button id="confirmClear" class="primary">Confirmar</button>
-      </div>
-    </div>
-  </div>
-
-  <div id="confirmRevealModal" style="display:none" class="modal-backdrop">
-    <div class="modal">
-      <h2>Revelar solução?</h2>
-      <p>Isso mostrará todas as células corretas.</p>
-      <div class="actions">
-        <button id="cancelReveal">Cancelar</button>
-        <button id="confirmReveal" class="primary">Revelar</button>
-      </div>
-    </div>
-  </div>
-
-  <div id="confirmCheckModal" style="display:none" class="modal-backdrop">
-    <div class="modal">
-      <h2>Checar progresso?</h2>
-      <p>Vamos destacar temporariamente as células incorretas. Deseja continuar?</p>
-      <div class="actions">
-        <button id="cancelCheck">Cancelar</button>
-        <button id="confirmCheck" class="primary">Checar</button>
-      </div>
-    </div>
-  </div>
-
-  <div id="winModal" style="display:none" class="modal-backdrop">
-    <div class="modal" id="winModalContent">
-      <h2>👏 Você venceu!</h2>
-      <div id="winStats"></div>
-      <div class="actions">
-        <button id="closeWin">Fechar</button>
-        <button id="newGameWin" class="primary">Novo puzzle</button>
-      </div>
-    </div>
-  </div>
-
-<script>
-(() => {
-  const $ = sel => document.querySelector(sel);
-  const gridEl = $('#grid'), topEl = $('#cluesTop'), leftEl = $('#cluesLeft');
-  const sizeBadge = $('#sizeBadge'), fillsBadge = $('#fillsBadge');
-  const timeBadge = $('#timeBadge'), errorsBadge = $('#errorsBadge');
-  const toast = $('#toast');
-  const boardWrap = $('#boardWrap');
-
-  const confirmClearModal = $('#confirmClearModal');
-  const confirmRevealModal = $('#confirmRevealModal');
-  const confirmCheckModal = $('#confirmCheckModal');
-  const winModal = $('#winModal');
-  const winStats = $('#winStats');
-
-  let W = 10, H = 10, density = 0.55;
-  let solution = [];     // H x W booleans
-  let player = [];       // H x W: 0 empty, 1 filled, 2 X
-  let mouseDown = false, paintMode = 1; // 1=fill, 2=mark, 0=empty
-
-  let errorsCount = 0;
-
-  // timer
-  let timerInterval = null; let startTime = null; let elapsed = 0; // seconds
-  function startTimer(){ stopTimer(); startTime = Date.now(); timerInterval = setInterval(()=>{ updateElapsed(); }, 500); }
-  function stopTimer(){ if(timerInterval) clearInterval(timerInterval); timerInterval = null; }
-  function updateElapsed(){ if(!startTime) return; elapsed = Math.floor((Date.now()-startTime)/1000); const mm = String(Math.floor(elapsed/60)).padStart(2,'0'); const ss = String(elapsed%60).padStart(2,'0'); timeBadge.textContent = `Tempo: ${mm}:${ss}`; }
-
-  function rngSeeded(len, p){
-    return Array.from({length: len}, () => Math.random() < p ? 1 : 0);
-  }
-
-  function computeClues(mat){
-    const rows = mat.map(row => {
-      const runs = []; let c = 0;
-      for (let v of row){ if(v){ c++; } else if(c){ runs.push(c); c=0; } }
-      if(c) runs.push(c);
-      return runs.length ? runs : [0];
-    });
-    const cols = [];
-    for(let x=0; x<W; x++){
-      let runs = [], c=0;
-      for(let y=0; y<H; y++){
-        if(mat[y][x]) c++; else if(c){ runs.push(c); c=0; }
-      }
-      if(c) runs.push(c);
-      cols.push(runs.length ? runs : [0]);
-    }
-    return {rows, cols};
-  }
-
-  function computeRunPositionsRow(row){
-    const res = []; let i=0, len=0;
-    while(i<row.length){ if(row[i]){ len=0; let start=i; while(i<row.length && row[i]){ len++; i++; } res.push({start, len}); } else i++; }
-    return res.length?res:[{start:0,len:0}];
-  }
-  function computeRunPositionsCol(colIndex){
-    const res=[]; let y=0; while(y<H){ if(solution[y][colIndex]){ let start=y, len=0; while(y<H && solution[y][colIndex]){ len++; y++; } res.push({start, len}); } else y++; }
-    return res.length?res:[{start:0,len:0}];
-  }
-
-  function renderClues({rows, cols}){
-    // Top clues (per coluna, stacked)
-    const maxTop = Math.max(...cols.map(c => c.length));
-    topEl.style.gridTemplateColumns = `repeat(${W}, var(--size))`;
-    topEl.innerHTML = '';
-    for(let x=0; x<W; x++){
-      const col = document.createElement('div'); col.className='clue-col';
-      col.style.height = `${maxTop*22}px`;
-      col.dataset.col = x;
-      const pad = maxTop - cols[x].length;
-      for(let i=0;i<pad;i++){ const dummy = document.createElement('div'); dummy.style.height='22px'; col.appendChild(dummy); }
-      cols[x].forEach(n => {
-        const span = document.createElement('div');
-        span.className = 'clue' + (n===0?' zero':'');
-        span.textContent = n;
-        col.appendChild(span);
-      });
-      topEl.appendChild(col);
-    }
-
-    // Left clues (per row)
-    const maxLeft = Math.max(...rows.map(r => r.length));
-    leftEl.style.gridTemplateRows = `repeat(${H}, var(--size))`;
-    leftEl.innerHTML = '';
-    for(let y=0; y<H; y++){
-      const row = document.createElement('div'); row.className='clue-row';
-      row.style.width = `${Math.max(1,maxLeft)*28}px`;
-      row.dataset.row = y;
-      const pad = maxLeft - rows[y].length;
-      for(let i=0;i<pad;i++){ const dummy = document.createElement('div'); dummy.style.width='28px'; row.appendChild(dummy); }
-      rows[y].forEach(n => {
-        const span = document.createElement('div');
-        span.className = 'clue' + (n===0?' zero':'');
-        span.textContent = n;
-        row.appendChild(span);
-      });
-      leftEl.appendChild(row);
-    }
-  }
-
-  function renderGrid(){
-    gridEl.style.gridTemplateColumns = `repeat(${W}, var(--size))`;
-    gridEl.style.gridTemplateRows = `repeat(${H}, var(--size))`;
-    gridEl.innerHTML = '';
-    for(let y=0; y<H; y++){
-      for(let x=0; x<W; x++){
-        const cell = document.createElement('div');
-        cell.className = 'cell';
-        cell.dataset.x = x; cell.dataset.y = y;
-  // Hover listeners
-  cell.addEventListener('mouseenter', () => highlightHover(x, y));
-  cell.addEventListener('mouseleave', () => clearHover());
-        gridEl.appendChild(cell);
-      }
-    }
-    updatePlayerView();
-  }
-
-  function adjustBoardWrapSize(){
-    const sizePx = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--size')) || 30;
-    const leftCols = leftEl.firstChild ? leftEl.firstChild.children.length : 1;
-    const leftWidth = Math.max(1,leftCols)*28;
-    const totalW = leftWidth + (W * sizePx) + 40;
-    boardWrap.style.width = totalW + 'px';
-  }
-
-  function updateBadges(){
-    sizeBadge.textContent = `Tamanho: ${W} × ${H}`;
-    const target = solution.flat().reduce((a,b)=>a+b,0);
-    const painted = player.flat().filter(v=>v===1).length;
-    fillsBadge.textContent = `Preenchidos: ${painted}/${target}`;
-    errorsBadge.textContent = `Erros: ${errorsCount}`;
-  }
-
-  // locked rows/cols
-  let lockedRows = [], lockedCols = [];
-
-  function updateClueHighlights(){
-    const {rows, cols} = computeClues(solution);
-
-    // Mark clues as hit/ok based on counts
-    const rowCounts = player.map(r => r.filter(v=>v===1).length);
-    const colCounts = Array.from({length:W},(_,x)=> player.reduce((a,r)=>a+(r[x]===1),0));
-
-    // left rows
-    [...leftEl.children].forEach((rowEl,y)=>{
-      const need = rows[y].reduce((a,b)=>a+b,0);
-      const got = rowCounts[y];
-      rowEl.querySelectorAll('.clue').forEach(el=>{
-        el.classList.toggle('hit', got>0);
-        el.classList.toggle('ok', got===need);
-        el.classList.remove('contemplated');
-      });
-    });
-    // top cols
-    [...topEl.children].forEach((colEl,x)=>{
-      const need = cols[x].reduce((a,b)=>a+b,0);
-      const got = colCounts[x];
-      colEl.querySelectorAll('.clue').forEach(el=>{
-        el.classList.toggle('hit', got>0);
-        el.classList.toggle('ok', got===need);
-        el.classList.remove('contemplated');
-      });
-    });
-
-    // mark "contemplated" individual runs when their segment é totalmente preenchido pelo jogador
-    // rows
-    for(let y=0;y<H;y++){
-      const runs = computeRunPositionsRow(solution[y]);
-      const clueEls = leftEl.children[y] ? [...leftEl.children[y].querySelectorAll('.clue')] : [];
-      for(let i=0;i<runs.length;i++){
-        const r = runs[i];
-        if(r.len===0) continue;
-        let allFilled = true;
-        for(let x=r.start;x<r.start+r.len;x++) if(player[y][x]!==1) allFilled=false;
-        if(allFilled && clueEls[i]) clueEls[i].classList.add('contemplated');
-      }
-    }
-
-    // cols
-    for(let x=0;x<W;x++){
-      const runs = computeRunPositionsCol(x);
-      const clueEls = topEl.children[x] ? [...topEl.children[x].querySelectorAll('.clue')] : [];
-      for(let i=0;i<runs.length;i++){
-        const r = runs[i];
-        if(r.len===0) continue;
-        let allFilled = true;
-        for(let y=r.start;y<r.start+r.len;y++) if(player[y][x]!==1) allFilled=false;
-        if(allFilled && clueEls[i]) clueEls[i].classList.add('contemplated');
-      }
-    }
-
-    // Auto-X em linhas/colunas corretas e travar
-    let changed = false;
-
-    for(let y=0;y<H;y++){
-      let rowCorrect = true;
-      for(let x=0;x<W;x++){
-        if(solution[y][x]===1 && player[y][x]!==1) { rowCorrect=false; break; }
-        if(solution[y][x]===0 && player[y][x]===1) { rowCorrect=false; break; }
-      }
-      if(rowCorrect){
-        for(let x=0;x<W;x++){
-          if(player[y][x]===0){ player[y][x]=2; changed = true; }
-        }
-        lockRow(y);
-      }
-    }
-
-    for(let x=0;x<W;x++){
-      let colCorrect = true;
-      for(let y=0;y<H;y++){
-        if(solution[y][x]===1 && player[y][x]!==1) { colCorrect=false; break; }
-        if(solution[y][x]===0 && player[y][x]===1) { colCorrect=false; break; }
-      }
-      if(colCorrect){
-        for(let y=0;y<H;y++){
-          if(player[y][x]===0){ player[y][x]=2; changed = true; }
-        }
-        lockCol(x);
-      }
-    }
-
-    if(changed) updatePlayerView();
-  }
-
-  function lockRow(y){
-    if(lockedRows[y]) return;
-    lockedRows[y]=true;
-    if(leftEl.children[y]) leftEl.children[y].classList.add('row-locked');
-    for(let x=0;x<W;x++){ const idx = y*W + x; const el = gridEl.children[idx]; if(el){ el.classList.add('locked'); } }
-  }
-  function lockCol(x){
-    if(lockedCols[x]) return;
-    lockedCols[x]=true;
-    if(topEl.children[x]) topEl.children[x].classList.add('col-locked');
-    for(let y=0;y<H;y++){ const idx = y*W + x; const el = gridEl.children[idx]; if(el){ el.classList.add('locked'); } }
-  }
-
-  function updatePlayerView(){
-    const cells = gridEl.children;
-    for(let y=0; y<H; y++){
-      for(let x=0; x<W; x++){
-        const i = y*W + x;
-        const state = player[y][x];
-        const el = cells[i];
-        el.classList.toggle('filled', state===1);
-        el.classList.toggle('mark', state===2);
-        el.classList.remove('wrong');
-        el.classList.remove('hovered','row-hovered','col-hovered'); // always clear on update
-      }
-    }
-    updateBadges();
-    updateClueHighlights();
-  }
-  // Hover highlight functions
-  function highlightHover(x, y) {
-    const cells = gridEl.children;
-    for(let yy=0; yy<H; yy++) {
-      for(let xx=0; xx<W; xx++) {
-        const i = yy*W + xx;
-        const el = cells[i];
-        el.classList.toggle('hovered', xx===x && yy===y);
-        el.classList.toggle('row-hovered', yy===y && !(xx===x && yy===y));
-        el.classList.toggle('col-hovered', xx===x && !(xx===x && yy===y));
-      }
-    }
-  }
-  function clearHover() {
-    const cells = gridEl.children;
-    for(let i=0; i<cells.length; i++) {
-      cells[i].classList.remove('hovered','row-hovered','col-hovered');
-    }
-  }
-
-  function makePuzzle(){
-    solution = Array.from({length:H}, () => rngSeeded(W, density));
-    if(solution.flat().every(v=>v===0)){
-      solution[Math.floor(Math.random()*H)][Math.floor(Math.random()*W)] = 1;
-    }
-    player = Array.from({length:H}, () => Array(W).fill(0));
-    lockedRows = Array(H).fill(false); lockedCols = Array(W).fill(false);
-    errorsCount = 0; elapsed = 0; startTime = null; stopTimer(); timeBadge.textContent = 'Tempo: 00:00';
-    renderClues(computeClues(solution));
-    renderGrid();
-    adjustBoardWrapSize();
-    startTimer();
-  }
-
-  function showToast(text, type=''){
-    const box = toast.firstElementChild;
-    box.textContent = text;
-    box.className = type ? type : '';
-    toast.style.display='flex';
-    setTimeout(()=> toast.style.display='none', 1500);
-  }
-
-  function checkWin(){
-    const ok = player.every((row,y)=> row.every((v,x)=> v===1 ? solution[y][x]===1 : (v!==1 ? true : false)));
-    const filledMatches = player.flat().filter(v=>v===1).length === solution.flat().reduce((a,b)=>a+b,0);
-    if(ok && filledMatches){
-      stopTimer();
-      showWinModal();
-      return true;
-    }
-    return false;
-  }
-
-  function validateMistakes(){
-    const cells = gridEl.children;
-    let mistakes = 0;
-    for(let y=0; y<H; y++){
-      for(let x=0; x<W; x++){
-        const i = y*W + x;
-        const st = player[y][x];
-        const should = solution[y][x]===1;
-        const wrong = (st===1 && !should);
-        cells[i].classList.toggle('wrong', wrong);
-        if(wrong) mistakes++;
-      }
-    }
-    if(mistakes) { errorsCount += mistakes; }
-    showToast(mistakes ? `⚠️ ${mistakes} célula(s) incorreta(s)` : 'Nenhum erro até agora!', mistakes? 'lose':'' );
-    setTimeout(()=>{ [...cells].forEach(c=>c.classList.remove('wrong')); }, 800);
-    updateBadges();
-  }
-
-  // Events: interaction should ignore locked cells
-  gridEl.addEventListener('mousedown', e=>{
-    if(!e.target.classList.contains('cell')) return;
-    e.preventDefault();
-    const x = +e.target.dataset.x, y = +e.target.dataset.y;
-    if(lockedRows[y] || lockedCols[x]) return;
-    mouseDown = true;
-    const next = cycleState(player[y][x], e.button===2);
-    player[y][x] = next;
-    paintMode = next || 0;
-    updatePlayerView();
-    checkWin();
-  });
-  gridEl.addEventListener('contextmenu', e=>{ e.preventDefault(); });
-  gridEl.addEventListener('mouseup', ()=> mouseDown=false);
-  gridEl.addEventListener('mouseleave', ()=> mouseDown=false);
-  gridEl.addEventListener('mousemove', e=>{
-    if(!mouseDown) return;
-    const t = e.target;
-    if(!t.classList || !t.classList.contains('cell')) return;
-    const x = +t.dataset.x, y = +t.dataset.y;
-    if(lockedRows[y] || lockedCols[x]) return;
-    if(player[y][x] !== paintMode){
-      player[y][x] = paintMode;
-      updatePlayerView();
-    }
-  });
-
-  gridEl.addEventListener('mousedown', e=>{ if(e.button===2) paintMode = 2; });
-
-  function cycleState(cur, right=false){
-    if(right){ return cur===2 ? 0 : 2; } else { if(cur===0) return 1; if(cur===1) return 2; return 0; }
-  }
-
-  // Controls
-  $('#gen').addEventListener('click', ()=>{
-    const w = parseInt($('#w').value, 10);
-    const h = parseInt($('#h').value, 10);
-    if(![5,10,15,20,25].includes(w) || ![5,10,15,20,25].includes(h)){
-      showToast('Escolha tamanhos de 5 em 5 entre 5 e 25.','lose'); return;
-    }
-    W = w; H = h; density = parseFloat($('#dens').value);
-    document.documentElement.style.setProperty('--size', `${Math.max(22, Math.min(34, 30 - Math.max(0, (W*H-100)/25)))}px`);
-    makePuzzle();
-    showToast('Novo puzzle gerado!', 'win');
-  });
-
-  // Abrir modais de ação
-  $('#check').addEventListener('click', ()=>{ confirmCheckModal.style.display='flex'; });
-  $('#clear').addEventListener('click', ()=>{ confirmClearModal.style.display='flex'; });
-  $('#reveal').addEventListener('click', ()=>{ confirmRevealModal.style.display='flex'; });
-
-  // Fluxo CLEAR
-  $('#cancelClear').addEventListener('click', ()=>{ confirmClearModal.style.display='none'; });
-  $('#confirmClear').addEventListener('click', ()=>{
-    for(let y=0;y<H;y++){
-      for(let x=0;x<W;x++){
-        if(lockedRows[y] || lockedCols[x]) continue; // não limpar linhas/colunas concluídas
-        player[y][x]=0;
-      }
-    }
-    updatePlayerView();
-    confirmClearModal.style.display='none';
-  });
-
-  // Fluxo REVEAL
-  $('#cancelReveal').addEventListener('click', ()=>{ confirmRevealModal.style.display='none'; });
-  $('#confirmReveal').addEventListener('click', ()=>{
-    player = solution.map(r => r.map(v => v ? 1 : 0));
-    updatePlayerView();
-    checkWin();
-    confirmRevealModal.style.display='none';
-  });
-
-  // Fluxo CHECK
-  $('#cancelCheck').addEventListener('click', ()=>{ confirmCheckModal.style.display='none'; });
-  $('#confirmCheck').addEventListener('click', ()=>{
-    if(checkWin()) { confirmCheckModal.style.display='none'; return; }
-    validateMistakes();
-    confirmCheckModal.style.display='none';
-  });
-
-  // Win modal
-  function showWinModal(){
-    winStats.innerHTML = `Tempo: <strong>${timeBadge.textContent.replace('Tempo: ','')}</strong><br>Erros totais: <strong>${errorsCount}</strong><br>Tamanho: ${W}×${H}`;
-    winModal.style.display='flex';
-  }
-  $('#closeWin').addEventListener('click', ()=>{ winModal.style.display='none'; });
-  $('#newGameWin').addEventListener('click', ()=>{ winModal.style.display='none'; $('#gen').click(); });
-
-  // Keyboard
-  window.addEventListener('keydown', (e)=>{
-    if(e.target.tagName === 'SELECT' || e.target.tagName === 'INPUT') return;
-    if(e.key.toLowerCase()==='c'){ $('#clear').click(); }
-    else if(e.key.toLowerCase()==='v'){ $('#check').click(); }
-    else if(e.key===' '){ e.preventDefault(); paintMode = (paintMode===1)?2:1; showToast(`Modo: ${paintMode===1?'Pintar':'X'}`); }
-  });
-
-  // initial
-  makePuzzle();
-})();
-</script>
+  <footer>
+    &copy; 2025 — Seu Arcade
+  </footer>
 </body>
 </html>
